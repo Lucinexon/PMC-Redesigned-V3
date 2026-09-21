@@ -221,14 +221,22 @@ const AuthManager = {
     const self = this;
     AUTH.onAuthStateChanged(function (user) { self.onAuth(user); });
   },
-  onAuth: function (user) {
+onAuth: function (user) {
+    this.authResolved = true; // <-- Mark that Firebase has finished checking storage
     const prevUid = this.uid;
     this.user = user || null;
     this.uid = user ? user.uid : null;
     this.guest = !user || user.isAnonymous;
-    if (user && !user.isAnonymous && user.displayName) this.name = user.displayName;
-    else if (user && user.isAnonymous) this.name = 'GUEST-' + String(user.uid).slice(0, 4).toUpperCase();
-    else this.name = null;
+
+    // Guaranteed username recovery: if displayName is missing, pull handle from the email!
+    if (user && !user.isAnonymous) {
+      this.name = user.displayName || (user.email ? user.email.split('@')[0] : 'OPERATOR');
+    } else if (user && user.isAnonymous) {
+      this.name = 'GUEST-' + String(user.uid).slice(0, 4).toUpperCase();
+    } else {
+      this.name = null;
+    }
+
     this.admin = !!(this.name && ADMIN_NAMES.indexOf(String(this.name).toLowerCase()) >= 0);
     this.updateUI();
     AdminManager.apply();

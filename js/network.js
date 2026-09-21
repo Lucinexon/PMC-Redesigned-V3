@@ -4,9 +4,9 @@
 
    MODULE MAP
    ──────────────────────────────────────────────────────────────────────────
-   QuotaGuard        Firebase Spark armor: 3s-typing-debounce note sync,
-                     20s hard sync interval, 15s presence heartbeat throttle,
-                     30-message chat caps, 24h message expiry sweep, and a
+   QuotaGuard        Firebase Spark armor: 1.5s-typing-debounce note sync,
+                     10s hard sync interval, 15s presence heartbeat throttle,
+                     500-message chat caps, 7d message expiry sweep, and a
                      self-imposed daily write budget (19k < 20k Spark limit).
    AuthManager       Pure username/password ⇄ synthetic email auth, guest
                      (anonymous) mode, cloud profile sync to players/{uid}.
@@ -16,7 +16,7 @@
    LoungeEngine      2D pixel-art observation deck canvas, click-to-walk,
                      presence-synced astronaut sprites + nameplates.
    ChatEngine        #global · #essay-group · #study-rooms · #direct-messages
-                     channels, 2s rate limiter, 24h ring-buffer.
+                     channels, 1s rate limiter, 7d ring-buffer.
    AdminManager      'admin' / 'lucinexon' moderation: golden badges, message
                      purge, global broadcast banner, system audit counts.
    NetworkEngine     Public facade consumed by engine.js (onScreen / onStateSave).
@@ -62,12 +62,12 @@
 /* >>> Paste your Firebase web app config here (Project settings → Your apps).
        Until then the codex runs in OFFLINE MODE with zero breakage. <<< */
 const FIREBASE_CONFIG = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID'
+  apiKey: 'AIzaSyC7hH65hJLyxM6ULL36Ub8I5bi_W0ZdXp4',
+  authDomain: 'pmc-web-app-project.firebaseapp.com',
+  projectId: 'pmc-web-app-project',
+  storageBucket: 'pmc-web-app-project.firebasestorage.app',
+  messagingSenderId: '335161156704',
+  appId: '1:335161156704:web:db783a2d74969830fb8f05'
 };
 
 const CFG_OK = (function () {
@@ -162,13 +162,13 @@ function guardedWrite(label, fn) {
   } catch (e) { return Promise.resolve(false); }
 }
 
-/* ---- 3-second typing debounce + 20-second hard interval (group notes) ---- */
+/* ---- Typing debounce + 10-second hard interval (group notes) ---- */
 const NoteSync = {
   dirty: false,
   debounceT: null,
   intervalT: null,
-  DEBOUNCE_MS: 3000,
-  INTERVAL_MS: 20000,
+  DEBOUNCE_MS: 1500,
+  INTERVAL_MS: 10000,
   tap: function () {                       // called on every editor keystroke
     this.dirty = true;
     NotebookManager.setSync('buffering');
@@ -441,7 +441,7 @@ function authErr(err) {
 /* ========================= [3] NOTEBOOK MANAGER =========================
    Dual-pane academic writing terminal. Scratchpad is local-only; group
    rooms sync through group_notes/{code} behind the QuotaGuard debounce
-   (3s typing pause OR 20s hard interval — never per keystroke). */
+   (1.5s typing pause OR 10s hard interval — never per keystroke). */
 const NotebookManager = {
   mode: 'scratch',          // 'scratch' | 'group'
   room: null,               // 4-digit code while in a group room
@@ -929,7 +929,7 @@ const LoungeEngine = {
   active: false, raf: null, lastT: 0,
   players: {},            // uid → { n, lv, x, y, ts, a, cx, cy, dir, walk }
   me: { x: 240, y: 244, cx: 240, cy: 244, dir: 1, walk: false },
-  presUnsub: null, beatT: null, FRESH_MS: 60000,
+  presUnsub: null, beatT: null, FRESH_MS: 300000,
   stars: null, sat: { x: 40, y: 46, v: 0.02 },
   REDUCED: (typeof matchMedia !== 'undefined') && matchMedia('(prefers-reduced-motion: reduce)').matches,
 
@@ -1255,13 +1255,13 @@ const LoungeEngine = {
 };
 
 /* ========================= [5] CHAT ENGINE =========================
-   Multi-channel realtime chat. Listeners are capped at .limit(30) and
-   messages older than 24h are dropped client-side (+ sweeper deletes
-   expired docs the viewer owns / admin-owned). 2s send rate limiter. */
+   Multi-channel realtime chat. Listeners are capped at .limit(250) and
+   messages older than 7d are dropped client-side (+ sweeper deletes
+   expired docs the viewer owns / admin-owned). 1s send rate limiter. */
 const ChatEngine = {
   channel: 'global', sub: null, dm: null,
-  unsub: null, lastDocs: [], lastSend: 0, RATE_MS: 2000, sweepT: null,
-  EXPIRE_MS: 86400000,
+  unsub: null, lastDocs: [], lastSend: 0, RATE_MS: 1000, sweepT: null, // 1s cooldown
+  EXPIRE_MS: 7 * 86400000, // Keeps chat history for 7 full days
   TOPICS: ['astronomy', 'physics', 'gaming-lore', 'mathematics', 'history', 'psychology'],
 
   colOf: function () {
@@ -1370,14 +1370,14 @@ const ChatEngine = {
       return;
     }
     log.innerHTML = '<div class="chat-sys">TUNING ' + esc(this.chanLabel()) + '…</div>';
-    /* THE RING BUFFER: newest 30 messages only — anti-storage-bloat cap */
-    this.unsub = col.orderBy('ts', 'desc').limit(30).onSnapshot(function (snap) {
+    /* THE RING BUFFER: newest 250 messages only — anti-storage-bloat cap */
+    this.unsub = col.orderBy('ts', 'desc').limit(250).onSnapshot(function (snap) {
       const now = Date.now();
       const docs = [];
       snap.forEach(function (d) {
         const m = d.data() || {};
         m._id = d.id;
-        /* 24h self-destruct check — expired packets are dropped at render */
+        /* 7d self-destruct check — expired packets are dropped at render */
         if (m.ts && now - m.ts > self.EXPIRE_MS) return;
         docs.push(m);
       });
@@ -1422,7 +1422,7 @@ const ChatEngine = {
   send: function () {
     const input = q('#chatInput');
     if (!input) return;
-    const text = String(input.value || '').trim().slice(0, 240);
+const text = String(input.value || '').trim().slice(0, 825);
     if (!text) return;
     if (!fbOK()) { say('<b>OFFLINE</b><br>Comms need the Firebase link.', 'speech', 2600); blip('bad'); return; }
     if (!AuthManager.user) { AuthManager.ensureAuth('Comms need an operator link — try again in a second.'); return; }

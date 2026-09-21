@@ -251,17 +251,13 @@ onAuth: function (user) {
       ChatEngine.identityChanged();
     }
   },
-  ensureAuth: function (why) {
-    /* called when a live feature needs an identity; quietly links a guest */
-    if (!fbOK() || this.user || this.busy) return;
-    const self = this;
-    this.busy = true;
+  
     AUTH.signInAnonymously().then(function () {
       self.busy = false;
       say('<b>GUEST LINK ESTABLISHED</b><br>' + (why || 'Live deck access granted — register anytime from ACCOUNT.'), 'power', 3600);
     }).catch(function () { self.busy = false; });
   },
-
+ 
   register: function (uname, pass, done) {
     if (!fbOK()) { done({ err: 'OFFLINE — Firebase link not configured on this deployment.' }); return; }
     if (!this.validName(uname)) { done({ err: 'USERNAME: 3–18 chars, letters / digits / underscore.' }); return; }
@@ -271,7 +267,14 @@ onAuth: function (user) {
       const u = cred.user;
       return u.updateProfile({ displayName: uname }).then(function () {
         return guardedWrite('register', function () {
-          const seed = self.snapshot();
+          
+  ensureAuth: function (why) {
+    /* Wait until Firebase finishes checking if a real user is already logged in */
+    if (!this.authResolved) return;
+    if (!fbOK() || this.user || this.busy) return;
+    const self = this;
+    this.busy = true;
+     const seed = self.snapshot();
           return DB.collection('players').doc(u.uid).set(seed, { merge: true }).then(function () {
             return DB.runTransaction(function (tx) {
               const ref = DB.collection('meta').doc('player_count');

@@ -115,6 +115,7 @@ function fbInit() {
     if (!window.firebase.apps || !window.firebase.apps.length) window.firebase.initializeApp(FIREBASE_CONFIG);
     DB = window.firebase.firestore();
     AUTH = window.firebase.auth();
+    try { AUTH.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL); } catch (e) {}
     try { DB.enablePersistence({ synchronizeTabs: true }).catch(function () {}); } catch (e) { /* optional */ }
     FB_READY = true;
     return true;
@@ -208,7 +209,7 @@ const Presence = {
 const AuthManager = {
   user: null, uid: null, name: null,
   guest: true, admin: false, busy: false,
-  lastPush: 0, pushPending: false, PUSH_MIN_MS: 30000,
+  authResolved: false, lastPush: 0, pushPending: false, PUSH_MIN_MS: 30000,
 
   emailOf: function (username) {
     return String(username).toLowerCase().replace(/[^a-z0-9]/g, '') + '@codex.local';

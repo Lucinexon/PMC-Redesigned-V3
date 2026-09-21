@@ -6,7 +6,7 @@
    ──────────────────────────────────────────────────────────────────────────
    QuotaGuard        Firebase Spark armor: 1.5s-typing-debounce note sync,
                      10s hard sync interval, 15s presence heartbeat throttle,
-                     500-message chat caps, 7d message expiry sweep, and a
+                     250-message chat caps, 7d message expiry sweep, and a
                      self-imposed daily write budget (19k < 20k Spark limit).
    AuthManager       Pure username/password ⇄ synthetic email auth, guest
                      (anonymous) mode, cloud profile sync to players/{uid}.

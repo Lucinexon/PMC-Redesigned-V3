@@ -23,30 +23,58 @@
 
    FIRESTORE CONTRACT (suggested security rules — paste in console):
    ──────────────────────────────────────────────────────────────────────────
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /players/{uid}      { allow read: if request.auth != null;
-                                  allow write: if request.auth.uid == uid; }
-       match /group_notes/{code} { allow read, write: if request.auth != null; }
-       match /lobby_presence/{uid} { allow read: if request.auth != null;
-                                  allow write: if request.auth.uid == uid; }
-       match /chat_global/{id}   { allow read, create: if request.auth != null;
-                                  allow delete: if request.auth != null; }
-       match /chat_essay/{id}    { allow read, create: if request.auth != null;
-                                  allow delete: if request.auth != null; }
-       match /chat_essay_{code}/{id} { allow read, create: if request.auth != null;
-                                  allow delete: if request.auth != null; }
-       match /chat_study_{topic}/{id} { allow read, create: if request.auth != null;
-                                  allow delete: if request.auth != null; }
-       match /chat_dm_{a}_{b}/{id}    { allow read, create: if request.auth != null;
-                                  allow delete: if request.auth != null; }
-       match /broadcasts/latest   { allow read: if request.auth != null;
-                                  allow write: if request.auth != null; }
-       match /meta/{doc}          { allow read: if request.auth != null;
-                                  allow write: if request.auth != null; }
-     }
-   }
+  rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if request is from sysop
+    function isAdmin() {
+      return request.auth != null && request.auth.uid in [
+        'YOUR_ADMIN_FIREBASE_UID_HERE'
+      ];
+    }
+
+    match /players/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == uid || isAdmin();
+    }
+    match /group_notes/{code} {
+      allow read, write: if request.auth != null;
+    }
+    match /lobby_presence/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == uid;
+    }
+    match /chat_global/{id} {
+      allow read, create: if request.auth != null;
+      allow delete: if isAdmin();
+    }
+    match /chat_essay/{id} {
+      allow read, create: if request.auth != null;
+      allow delete: if isAdmin();
+    }
+    match /chat_essay_{code}/{id} {
+      allow read, create: if request.auth != null;
+      allow delete: if isAdmin();
+    }
+    match /chat_study_{topic}/{id} {
+      allow read, create: if request.auth != null;
+      allow delete: if isAdmin();
+    }
+    match /chat_dm_{a}_{b}/{id} {
+      allow read, create: if request.auth != null;
+      allow delete: if isAdmin();
+    }
+    match /broadcasts/latest {
+      allow read: if request.auth != null;
+      allow write: if isAdmin(); // ONLY admin can send broadcasts
+    }
+    match /meta/{doc} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}
 
    OFFLINE CONTRACT — if FIREBASE_CONFIG is still the placeholder, or the
    Firebase CDN is unreachable, this layer degrades to OFFLINE MODE: every

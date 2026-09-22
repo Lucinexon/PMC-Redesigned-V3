@@ -221,10 +221,10 @@ const NoteSync = {
   }
 };
 
-/* ---- 15-second presence heartbeat ---- */
+/* ---- 10-second presence heartbeat ---- */
 const Presence = {
   last: 0,
-  MIN_MS: 15000,
+  MIN_MS: 10000,
   due: function (force) { return force || (Date.now() - this.last) >= this.MIN_MS; },
   mark: function () { this.last = Date.now(); }
 };

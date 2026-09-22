@@ -78,7 +78,7 @@ const CFG_OK = (function () {
   } catch (e) { return false; }
 })();
 
-const ADMIN_NAMES = ['admin', 'lucinexon'];           // hardcoded operators
+const ADMIN_UIDS = ['h3tpYLgtCDdiWzoSfUPkih2r3wa2'];           // hardcoded operators
 const LS = {
   nb: 'polymath_codex_nb_v1',          // personal scratchpad text
   quota: 'polymath_codex_quota_v1',    // daily write budget ledger

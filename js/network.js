@@ -978,9 +978,9 @@ const LoungeEngine = {
   W: 480, H: 300, FLOOR_Y: 185, MIN_X: 16, MAX_X: 464, MIN_Y: 205, MAX_Y: 282,
   cv: null, ctx: null, buf: null, bufCtx: null,
   active: false, raf: null, lastT: 0,
-  players: {},            // uid → { n, lv, x, y, ts, a, cx, cy, dir, walk }
+  players: {},            // uid → { n, lv, x, y, ts, a, cx, cy, dir, walk, _localSeen, _remoteTs }
   me: { x: 240, y: 244, cx: 240, cy: 244, dir: 1, walk: false },
-  presUnsub: null, beatT: null, FRESH_MS: 35000, // Disconnect ghosts after 35s (was 300000ms / 5 mins)
+  presUnsub: null, beatT: null,
   stars: null, sat: { x: 40, y: 46, v: 0.02 },
   REDUCED: (typeof matchMedia !== 'undefined') && matchMedia('(prefers-reduced-motion: reduce)').matches,
 
@@ -1006,14 +1006,10 @@ const LoungeEngine = {
 
   setActive: function (on) {
     this.active = !!on;
-    if (on) {
-      this.enter();
-    } else {
-      this.leave();
-    }
+    if (on) this.enter();
+    else this.leave();
   },
 
-  // Helper to attach the real-time presence listener
   attachListener: function () {
     if (!fbOK() || !AuthManager.user || this.presUnsub) return;
     const self = this;
@@ -1027,16 +1023,10 @@ const LoungeEngine = {
   enter: function () {
     const self = this;
     if (!this.cv) this.init();
-    
-    // Attach listener if user is already authenticated
     this.attachListener();
-
     if (fbOK()) AuthManager.ensureAuth('The lounge needs an operator link to see other operators.');
-    
-    // Immediate heartbeat announcement
     this.beat(true);
-    
-    if (!this.beatT) this.beatT = setInterval(function () { self.beat(false); }, 10000);
+    if (!this.beatT) this.beatT = setInterval(function () { self.beat(false); }, 7000);
     if (!this.raf) { this.lastT = 0; this.raf = requestAnimationFrame(function (t) { self.frame(t); }); }
     this.renderRoster();
     this.updateWhoami();
@@ -1045,7 +1035,7 @@ const LoungeEngine = {
   leave: function () {
     clearInterval(this.beatT); this.beatT = null;
     if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
-    this.clearPresence(); // Remove sprite immediately on screen switch
+    this.clearPresence();
   },
 
   detachAll: function () {
@@ -1054,16 +1044,15 @@ const LoungeEngine = {
   },
 
   identityChanged: function () {
-    if (this.active) { 
-      // Connect listener and announce presence the instant Auth resolves
+    if (this.active) {
       this.attachListener();
-      this.beat(true); 
-      this.renderRoster(); 
-      this.updateWhoami(); 
+      this.beat(true);
+      this.renderRoster();
+      this.updateWhoami();
     }
-    if (this.presUnsub && !AuthManager.user) { 
-      try { this.presUnsub(); } catch (e) {} 
-      this.presUnsub = null; 
+    if (this.presUnsub && !AuthManager.user) {
+      try { this.presUnsub(); } catch (e) {}
+      this.presUnsub = null;
     }
   },
 
@@ -1074,6 +1063,11 @@ const LoungeEngine = {
     } catch (e) {}
   },
 
+  deleteGhost: function (uid) {
+    if (!fbOK() || !uid) return;
+    DB.collection('lobby_presence').doc(uid).delete().catch(function () {});
+  },
+
   onClick: function (e) {
     const r = this.cv.getBoundingClientRect();
     const x = (e.clientX - r.left) * (this.W / r.width);
@@ -1082,7 +1076,6 @@ const LoungeEngine = {
     this.me.y = Math.max(this.MIN_Y, Math.min(this.MAX_Y, Math.round(y)));
     this.me.walk = true;
     blip('click');
-    /* positions ride the 15s heartbeat — never written per frame */
   },
 
   beat: function (force) {
@@ -1105,19 +1098,48 @@ const LoungeEngine = {
     const now = Date.now();
     const next = {};
     const self = this;
+
     snap.forEach(function (doc) {
       const d = doc.data() || {};
-      if (!d.ts || now - d.ts > self.FRESH_MS) return;     // expired → invisible
       const uid = doc.id;
-      if (uid === AuthManager.uid) return;                  // local player is drawn from `me`
+
+      // Skip self
+      if (uid === AuthManager.uid) return;
+
       const prev = self.players[uid];
+      const timeDiff = Math.abs(now - (d.ts || 0));
+
+      // 1. If player stopped sending new heartbeats for >22s on our local clock, purge ghost
+      if (prev && prev._localSeen && (now - prev._localSeen > 22000)) {
+        self.deleteGhost(uid);
+        return;
+      }
+
+      // 2. If first time seeing this doc and it has been abandoned for >60s, purge ghost
+      if (!prev && (!d.ts || timeDiff > 60000)) {
+        self.deleteGhost(uid);
+        return;
+      }
+
+      // 3. Keep local arrival time current whenever sender sends a new heartbeat
+      const localSeen = (prev && prev._remoteTs === d.ts) ? prev._localSeen : now;
+
       next[uid] = {
-        n: String(d.n || 'OP').slice(0, 14), lv: d.lv || 1, a: !!d.a,
-        x: d.x || 240, y: d.y || 244,
-        cx: prev ? prev.cx : (d.x || 240), cy: prev ? prev.cy : (d.y || 244),
-        dir: prev ? prev.dir : 1, walk: true, ts: d.ts
+        n: String(d.n || 'OP').slice(0, 14),
+        lv: d.lv || 1,
+        a: !!d.a,
+        x: d.x || 240,
+        y: d.y || 244,
+        cx: prev ? prev.cx : (d.x || 240),
+        cy: prev ? prev.cy : (d.y || 244),
+        dir: prev ? prev.dir : 1,
+        walk: true,
+        ts: d.ts,
+        _localSeen: localSeen,
+        _remoteTs: d.ts
       };
     });
+
     this.players = next;
     this.renderRoster();
     const fresh = Object.keys(next).length + (AuthManager.user ? 1 : 0);
@@ -1129,6 +1151,7 @@ const LoungeEngine = {
   freshCount: function () {
     return Object.keys(this.players).length + (AuthManager.user ? 1 : 0);
   },
+
   onlineOperators: function () {
     const out = [{ uid: AuthManager.uid, name: AuthManager.name || 'GUEST', me: true, admin: AuthManager.admin }];
     const self = this;

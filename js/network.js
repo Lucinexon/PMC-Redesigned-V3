@@ -221,14 +221,6 @@ const AuthManager = {
     const self = this;
     AUTH.onAuthStateChanged(function (user) { self.onAuth(user); });
   },
-onAuth: function (user) {
-    this.authResolved = true; // <-- Mark that Firebase has finished checking storage
-    const prevUid = this.uid;
-init: function () {
-    if (!fbOK()) return;
-    const self = this;
-    AUTH.onAuthStateChanged(function (user) { self.onAuth(user); });
-  },
 
   onAuth: function (user) {
     this.authResolved = true; // <-- Mark that Firebase has finished checking storage
@@ -312,32 +304,7 @@ init: function () {
     }).catch(function (err) { done({ err: authErr(err) }); });
   },
 
-  login: function (uname, pass, done) {    this.user = user || null;
-    this.uid = user ? user.uid : null;
-    this.guest = !user || user.isAnonymous;
-
-    // Guaranteed username recovery: if displayName is missing, pull handle from the email!
-    if (user && !user.isAnonymous) {
-      this.name = user.displayName || (user.email ? user.email.split('@')[0] : 'OPERATOR');
-    } else if (user && user.isAnonymous) {
-      this.name = 'GUEST-' + String(user.uid).slice(0, 4).toUpperCase();
-    } else {
-      this.name = null;
-    }
-
-    this.admin = !!(this.name && ADMIN_NAMES.indexOf(String(this.name).toLowerCase()) >= 0);
-    this.updateUI();
-    AdminManager.apply();
-    if (this.user) {
-      if (!this.guest) this.ensureProfile();
-      if (prevUid !== this.uid) {
-        LoungeEngine.identityChanged();
-        ChatEngine.identityChanged();
-      }
-    } else {
-      LoungeEngine.identityChanged();
-      ChatEngine.identityChanged();
-uname, pass, done) {
+  login: function (uname, pass, done) {
     if (!fbOK()) { done({ err: 'OFFLINE — Firebase link not configured on this deployment.' }); return; }
     if (!this.validName(uname)) { done({ err: 'USERNAME: 3–18 chars, letters / digits / underscore.' }); return; }
     AUTH.signInWithEmailAndPassword(this.emailOf(uname), String(pass))

@@ -238,7 +238,7 @@ const AuthManager = {
       this.name = null;
     }
 
-    this.admin = !!(this.name && ADMIN_NAMES.indexOf(String(this.name).toLowerCase()) >= 0);
+    this.admin = !!(user && !user.isAnonymous && ADMIN_UIDS.indexOf(user.uid) >= 0);
     this.updateUI();
     AdminManager.apply();
     if (this.user) {

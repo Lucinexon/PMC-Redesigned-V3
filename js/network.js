@@ -1472,7 +1472,10 @@ const text = String(input.value || '').trim().slice(0, 825);
   },
 
   del: function (id) {
-    if (!AdminManager.isAdmin() || !fbOK()) return;
+    if (!AdminManager.isAdmin() || !fbOK()) {
+      say('Unauthorized.', 'shield', 2000);
+      return;
+    }
     const col = this.colOf();
     if (!col || !id) return;
     guardedWrite('purge-msg', function () { return col.doc(id).delete(); });

@@ -980,7 +980,7 @@ const LoungeEngine = {
   active: false, raf: null, lastT: 0,
   players: {},            // uid → { n, lv, x, y, ts, a, cx, cy, dir, walk }
   me: { x: 240, y: 244, cx: 240, cy: 244, dir: 1, walk: false },
-  presUnsub: null, beatT: null, FRESH_MS: 300000,
+  presUnsub: null, beatT: null, FRESH_MS: 35000, // Disconnect ghosts after 35s (was 300000ms / 5 mins)
   stars: null, sat: { x: 40, y: 46, v: 0.02 },
   REDUCED: (typeof matchMedia !== 'undefined') && matchMedia('(prefers-reduced-motion: reduce)').matches,
 
@@ -1013,35 +1013,65 @@ const LoungeEngine = {
     }
   },
 
+  // Helper to attach the real-time presence listener
+  attachListener: function () {
+    if (!fbOK() || !AuthManager.user || this.presUnsub) return;
+    const self = this;
+    try {
+      this.presUnsub = DB.collection('lobby_presence').onSnapshot(function (snap) {
+        self.onPresence(snap);
+      }, function () {});
+    } catch (e) {}
+  },
+
   enter: function () {
     const self = this;
     if (!this.cv) this.init();
-    if (fbOK() && AuthManager.user && !this.presUnsub) {
-      try {
-        this.presUnsub = DB.collection('lobby_presence').onSnapshot(function (snap) {
-          self.onPresence(snap);
-        }, function () {});
-      } catch (e) {}
-    }
+    
+    // Attach listener if user is already authenticated
+    this.attachListener();
+
     if (fbOK()) AuthManager.ensureAuth('The lounge needs an operator link to see other operators.');
+    
+    // Immediate heartbeat announcement
     this.beat(true);
-    if (!this.beatT) this.beatT = setInterval(function () { self.beat(false); }, 15000);
+    
+    if (!this.beatT) this.beatT = setInterval(function () { self.beat(false); }, 10000);
     if (!this.raf) { this.lastT = 0; this.raf = requestAnimationFrame(function (t) { self.frame(t); }); }
     this.renderRoster();
     this.updateWhoami();
   },
+
   leave: function () {
     clearInterval(this.beatT); this.beatT = null;
     if (this.raf) { cancelAnimationFrame(this.raf); this.raf = null; }
+    this.clearPresence(); // Remove sprite immediately on screen switch
   },
+
   detachAll: function () {
     this.leave();
     if (this.presUnsub) { try { this.presUnsub(); } catch (e) {} this.presUnsub = null; }
   },
 
   identityChanged: function () {
-    if (this.active) { this.beat(true); this.renderRoster(); this.updateWhoami(); }
-    if (this.presUnsub && !AuthManager.user) { try { this.presUnsub(); } catch (e) {} this.presUnsub = null; }
+    if (this.active) { 
+      // Connect listener and announce presence the instant Auth resolves
+      this.attachListener();
+      this.beat(true); 
+      this.renderRoster(); 
+      this.updateWhoami(); 
+    }
+    if (this.presUnsub && !AuthManager.user) { 
+      try { this.presUnsub(); } catch (e) {} 
+      this.presUnsub = null; 
+    }
+  },
+
+  clearPresence: function () {
+    if (!fbOK() || !AuthManager.uid) return;
+    try {
+      DB.collection('lobby_presence').doc(AuthManager.uid).delete().catch(function () {});
+    } catch (e) {}
   },
 
   onClick: function (e) {
@@ -1738,7 +1768,11 @@ function boot() {
       LoungeEngine.updateWhoami();
     }
     window.addEventListener('beforeunload', function () {
-      try { NotebookManager.saveScratch(); NoteSync.stop(); } catch (e) {}
+      try { 
+        NotebookManager.saveScratch(); 
+        NoteSync.stop(); 
+        LoungeEngine.clearPresence(); // Instantly removes player for everyone else
+      } catch (e) {}
     });
   } catch (e) {
     if (window.console) console.warn('[codex-net] boot degraded:', e);

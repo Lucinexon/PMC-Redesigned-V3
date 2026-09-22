@@ -1509,7 +1509,9 @@ const text = String(input.value || '').trim().slice(0, 825);
    Designated sysops: usernames 'admin' and 'lucinexon'. Golden [ADMIN]
    badges, [×] message purge, global broadcast banner, audit counts. */
 const AdminManager = {
-  isAdmin: function () { return !!(AuthManager.user && AuthManager.admin); },
+  isAdmin: function () { 
+    return !!(AuthManager.user && !AuthManager.guest && AuthManager.admin && ADMIN_UIDS.indexOf(AuthManager.uid) >= 0); 
+  },
   apply: function () {
     const bar = q('#chatAdminBar');
     if (bar) bar.hidden = !this.isAdmin() || !fbOK();
@@ -1526,6 +1528,11 @@ const AdminManager = {
     } catch (e) {}
   },
   broadcast: function () {
+    if (!this.isAdmin()) {
+      say('Access denied — Sysop privileges required.', 'shield', 3000);
+      blip('bad');
+      return;
+    }
     const inp = q('#adminBroadcastIn');
     const text = inp ? String(inp.value || '').trim().slice(0, 120) : '';
     if (!text) { say('Type the alert text first, sysop.', 'antenna', 2200); return; }
@@ -1540,8 +1547,9 @@ const AdminManager = {
     });
   },
   auditTick: function () {
+    if (!this.isAdmin() || !fbOK()) return;
     const el = q('#adminAudit');
-    if (!el || !fbOK()) return;
+    if (!el) return;
     const active = LoungeEngine.freshCount();
     el.textContent = 'ACTIVE CONNECTIONS: ' + active + ' · WRITES TODAY: ' + QuotaGuard.ledger.w + '/' + QuotaGuard.BUDGET;
     DB.collection('meta').doc('player_count').get().then(function (doc) {

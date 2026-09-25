@@ -73,7 +73,7 @@ function drawSprites(root) {
   });
 }
 
-/* ================= AUDIO SYNTH ================= */
+/* ================= AUDIO SYNTH (sonar pings · weightless envelopes) ================= */
 let AC = null;
 function sfx(name) {
   if (S.sfx === false) return;
@@ -82,22 +82,48 @@ function sfx(name) {
     if (AC.state === 'suspended') AC.resume();
     const t = AC.currentTime;
     const tone = (f, st, d, type, v) => {
-      const o = AC.createOscillator(), g = AC.createGain();
-      o.type = type || 'square'; o.frequency.value = f;
-      g.gain.setValueAtTime(v || .04, t + st);
+      const o = AC.createOscillator(), g = AC.createGain(), f2 = AC.createBiquadFilter();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(f, t + st);
+      f2.type = 'lowpass'; f2.frequency.setValueAtTime(1800, t + st);
+      g.gain.setValueAtTime(0.0001, t + st);
+      g.gain.exponentialRampToValueAtTime(v || .026, t + st + 0.02);
       g.gain.exponentialRampToValueAtTime(.0001, t + st + d);
-      o.connect(g); g.connect(AC.destination); o.start(t + st); o.stop(t + st + d + .02);
+      o.connect(f2); f2.connect(g); g.connect(AC.destination);
+      o.start(t + st); o.stop(t + st + d + .05);
     };
-    if (name === 'ok') { tone(660, 0, .09); tone(880, .09, .12); }
-    else if (name === 'bad') { tone(170, 0, .16, 'sawtooth', .05); }
-    else if (name === 'flip') { tone(520, 0, .05); }
-    else if (name === 'click') { tone(440, 0, .04, 'square', .025); }
-    else if (name === 'reveal') { tone(392, 0, .06); tone(523, .06, .09, 'triangle', .05); }
-    else if (name === 'level') { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * .11, .14)); }
-    else if (name === 'badge') { [784, 988, 1319].forEach((f, i) => tone(f, i * .09, .12, 'triangle', .05)); }
-    else if (name === 'done') { [659, 784, 988].forEach((f, i) => tone(f, i * .1, .13)); }
-    else if (name === 'heal') { tone(392, 0, .12, 'triangle', .05); tone(523, .09, .14, 'triangle', .05); tone(659, .18, .22, 'triangle', .05); }
+    if (name === 'ok') { tone(528, 0, .24, 'sine', .028); tone(792, .14, .32, 'triangle', .02); }
+    else if (name === 'bad') { tone(196, 0, .32, 'triangle', .028); tone(147, .1, .36, 'sine', .018); }
+    else if (name === 'flip') { tone(392, 0, .16, 'sine', .016); }
+    else if (name === 'click') { tone(330, 0, .1, 'sine', .014); }
+    else if (name === 'reveal') { tone(440, 0, .18, 'triangle', .02); tone(660, .12, .26, 'sine', .016); }
+    else if (name === 'level') { [523, 659, 784, 988].forEach((f, i) => tone(f, i * .16, .3, 'triangle', .026)); }
+    else if (name === 'badge') { [659, 784, 1047].forEach((f, i) => tone(f, i * .15, .28, 'sine', .024)); }
+    else if (name === 'done') { [523, 659, 784].forEach((f, i) => tone(f, i * .16, .32, 'triangle', .024)); }
+    else if (name === 'heal') { tone(330, 0, .22, 'sine', .02); tone(440, .14, .26, 'triangle', .018); tone(528, .28, .4, 'sine', .02); }
   } catch (e) { /* audio unavailable */ }
+}
+
+/* ================= MARINE SNOW (slow bioluminescent motes) ================= */
+function initMarineSnow() {
+  const host = document.getElementById('starfield') || document.querySelector('.starfield');
+  if (!host) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const n = reduce ? 18 : 56;
+  for (let i = 0; i < n; i++) {
+    const m = document.createElement('i');
+    const s = 1 + ((Math.random() * 2.6) | 0);
+    const dx = (-22 + Math.random() * 44).toFixed(1) + 'px';
+    const dy = (-70 - Math.random() * 140).toFixed(1) + 'px';
+    const dur = (reduce ? 0 : (16 + Math.random() * 22));
+    m.style.cssText = 'width:' + s + 'px;height:' + s + 'px;left:' + (Math.random() * 100).toFixed(2) +
+      '%;top:' + (Math.random() * 100).toFixed(2) + '%;--d:' + dur.toFixed(1) + 's;--dl:-' +
+      (Math.random() * 24).toFixed(1) + 's;--dx:' + dx + ';--dy:' + dy + ';opacity:' +
+      (0.12 + Math.random() * 0.4).toFixed(2);
+    if (Math.random() < .22) m.style.background = '#9fe8dc';
+    else if (Math.random() < .18) m.style.background = '#d6ecf7';
+    host.appendChild(m);
+  }
 }
 
 /* ================= CONFETTI (canvas-confetti, pixel-styled) ================= */
@@ -115,7 +141,7 @@ function confettiInit() {
 function celebrate(n) {
   if (REDUCED) return;
   const fx = confettiInit(); if (!fx) return;
-  const colors = ['#3fe0ff', '#2ee6b8', '#a78bfa', '#ffd166', '#ff5c9e', '#f7faff'];
+  const colors = ['#7ecfe0', '#5dccc0', '#8aaad4', '#d4c48a', '#c5e8f0', '#d6ecf7'];
   fx({ particleCount: Math.min(n || 90, 130), spread: 75, origin: { y: .68 }, colors, shapes: ['square'], scalar: 1.05, zIndex: 300, ticks: 220 });
   if ((n || 0) >= 80) {
     setTimeout(() => fx({ particleCount: 55, angle: 60, spread: 62, origin: { x: 0, y: .72 }, colors, shapes: ['square'], scalar: .95 }), 160);
@@ -1153,6 +1179,7 @@ function bindEvents() {
 /* ================= INIT ================= */
 function init() {
   drawSprites();
+  initMarineSnow();
   mountAll();
   buildNav();
   buildMissionMap();
